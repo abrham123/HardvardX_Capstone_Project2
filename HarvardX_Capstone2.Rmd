@@ -1,0 +1,249 @@
+---
+title: "HarvardX_Capstone2"
+author: "Abrham Birru"
+date: "12/30/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+For this project I chose the Adult Census Income database from: "https://www.kaggle.com" .The first extraction of the data was made by Ronny Kohavi and Barry Becker, on the 1994 Census bureau database.
+
+## Dataset
+ In this dataset each row represents a person and there are several variables as columns. The aim of the dataset is to combine the variables in a machine learning algorithm and predict whether a person's income is greater than $50k or not.
+
+# Methods and Analysis
+## Downloading the Dataset
+I downloaded the dataset from: "https://www.kaggle.com/uciml/adult-census-income"and then uploaded it to my personal github account in order to import it to my code.The URL of the data file on my github account is: "https://github.com/abrham123/HardvardX_Capstone_Project2/blob/main/adult.csv" .
+
+```{r, echo=TRUE, warning=FALSE}
+#Install Packages
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org") 
+ if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org") 
+ if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org") 
+ if(!require(rpart)) install.packages("rpart", repos = "http://cran.us.r-project.org") 
+ if(!require(randomForest)) install.packages("randomForest", repos = "http://cran.us.r-project.org") 
+ if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org") 
+ if(!require(gbm)) install.packages("gbm", repos = "http://cran.us.r-project.org") 
+
+#Download the dataset
+data<- read.csv("https://raw.githubusercontent.com/abrham123/HardvardX_Capstone_Project2/main/adult.csv")
+```
+
+## Data Exploration
+We can see that there are 32561 observations as rows and 15 variables as columns. We can also observe the category of each variable and the first 6 observations.
+
+```{r,echo=TRUE}
+#Dimensions
+dim(data)
+
+#Structure
+str(data)
+
+#First 6 Observations
+head(data)
+```
+
+## Data cleaning
+Let us clean our data in order not to have any NAs or missing values. We are going to remove all the observations that have missing values shown as "?". Observing the structure we can easily see that this happens in 3 variables: workclass, occupation, and native.country. After cleaning the dataset we can see that there are 30162 observations left.
+
+```{r,echo=TRUE}
+data<- data%>% filter(!workclass=="?", !occupation=="?", !native.country=="?")
+dim(data)
+```
+
+## Summary of the data
+The summary of the data shows that the vast majority of the observations have an income less than or equal to 50k dollars. Specifically 22654 persons have an income <=50k dollars, while the rest 7508 earn more than 50k. The proportion of the majority is 75.01%.
+```{r, echo=TRUE}
+summary(data)
+```
+
+Before we go further to our analysis we should remove some variables that are unnecessary to it. These are "fnlwgt" variable which is an estimation measure of the units of population that are representative of the observation, and the "education" variable as we have also the "educatio.num"
+
+## Remove unnecessary variables
+```{r, echo=TRUE}
+data<- data%>% select(-c(education, fnlwgt))
+```
+
+## Create Train and Validation sets
+The next step is to create the train and validation sets. Validation set will proportionally the 25% of the data and the rest 75% will get into the train set.
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(1,sample.kind = "Rounding")  #if using R3.5 or earlier set.seed(1) 
+test_index <- createDataPartition(data$income, times = 1, p = 0.25, list = FALSE) 
+validation<- data[test_index, ] 
+train_set<- data[-test_index, ] 
+``` 
+
+## Data Visualization
+Through the data visualization we can inspect several variables in order to get good predictors. 
+
+### Age
+The age variable can be a good predictor as it has a large variavility. We can see that on the following histogram. 
+```{r,echo=TRUE}
+train_set%>% ggplot(aes(age)) + 
+  geom_histogram(aes(fill=income),color='blue',binwidth=1) +   
+  labs(title= "Age Distribution for each Income")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Education.num
+Education Number is a variable showing the education level from 1 (Preschool)  to 16 (Doctorate). It can be inferred by the following histogram that the higher the education level is, the higher the proportion of people having an income more than 50k gets.
+```{r,echo=TRUE}
+train_set%>% ggplot(aes(education.num))+
+  geom_histogram(aes(fill=income), color='blue', binwidth = 1)+
+  labs(title = "Education Number Distribution for each income")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Marital.status
+We can see that the proportion of people with more than 50k as income are well distributed according to their marital status. An exemption is people with marital status "Married-civ-spouse". In this category belong the most people of those having >50k income(at about 5000 out of 7508).
+```{r, echo=TRUE, warning=FALSE}
+train_set%>% ggplot(aes(marital.status))+
+  geom_histogram(aes(fill=income),stat = "count", color='blue')+
+  labs(title = "Marital Status Distribution for each income")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+### Occupation
+It can be inferred that certain occupations have a bigger proportion of people >50k.
+
+```{r,echo=TRUE}
+qplot(income,data = train_set, fill=occupation)+ facet_grid(.~occupation)+
+  labs(title = "Income Distribution for each occupation")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+### Sex
+Here we can see that the vast majority of people having an income greater than 50000 dollars are males.
+```{r, echo=TRUE}
+train_set%>% ggplot(aes(sex))+
+  geom_bar(aes(fill=income), stat = "count")+
+  labs(title = "Sex distribution for each income")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Race
+We can see that almost all people having greater income than 50k are white.
+```{r, echo=TRUE, warning=FALSE}
+train_set %>% ggplot(aes(race))+
+  geom_histogram(aes(fill=income),stat="count")+
+  labs(title = "Race distribution for each income")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Machine Learning Models
+After inspecting the dataset and several variables of it , it is time to proceed to our Machine Learning Models in order to predict whether a person has an income lower than or equal to 50k dollars, or greater than this. We are going to inspect the Accuracy of each model so as to find the best predictive model with the highest accuracy.
+
+## Split the Train set to run models more efficiently 
+Before proceeding with the predicting models we are going to split the train set to training and testing set, so as to make our system perform more efficiently.
+```{r,echo=TRUE, warning=FALSE}
+set.seed(10,sample.kind = "Rounding")  #if using R3.5 or earlier set.seed(10) 
+test_split_index <- createDataPartition(train_set$income, times = 1, p = 0.2, list = FALSE) 
+testing <- train_set[test_split_index, ] 
+training <- train_set[-test_split_index, ]
+```
+### Knn (K nearest neighbors) Model
+We are going to use a 10-fold cross-validation, have 10 samples and use 10% of the observations in each set.
+```{r, echo=TRUE, warning=FALSE}
+#Using a 10 fold cross-validation
+ set.seed(9,sample.kind = "Rounding")  
+    control <- trainControl(method = "cv", number = 10, p = .9) 
+    train_knn <- train(income ~ .,  
+                   method = "knn",  
+                   data = training,  
+                   tuneGrid = data.frame(k = seq(5,33,2)),  
+                   trControl = control) 
+    #See the best k value 
+    train_knn$bestTune 
+    #Compute the accuracy of the knn model on the validation dataset 
+    knn_accuracy <- confusionMatrix(predict(train_knn, testing, type = "raw"),  
+                                    testing$income)$overall["Accuracy"] 
+    #Create a table to save our results for each model 
+    accuracy_results <- tibble(method = "knn", Accuracy = knn_accuracy) 
+    #View the knn accuracy results in our table 
+    accuracy_results %>% knitr::kable() 
+ ```
+ 
+###Classification Tree Model
+ The second model that we are going to inspect is The Classification Tree Model.
+Cross-validation will be used to choose the best cp(complexity parameter).
+```{r, echo=TRUE, warning=FALSE}
+# Train a Classification Tree model 
+set.seed(300,sample.kind = "Rounding")  #if using R3.5 or earlier set.seed(300) 
+ train_rpart <- train(income ~ ., 
+                      method = "rpart", 
+                      tuneGrid = data.frame(cp = seq(0, 0.01, len=100)), 
+                      data = training) 
+ #See the best cp value 
+ train_rpart$bestTune 
+ #Compute the accuracy of the Classification Tree model on the testing dataset 
+ rpart_accuracy <- confusionMatrix(predict(train_rpart, testing), 
+                                   testing$income)$overall["Accuracy"] 
+  
+ #Save the Classification Tree model accuracy results to our table 
+ accuracy_results <- bind_rows(accuracy_results, 
+                               tibble(method="rpart", Accuracy = rpart_accuracy)) 
+ #View the rpart accuracy results in our table 
+ accuracy_results %>% knitr::kable() 
+```
+
+
+### Random Forest Model
+Last but not least, we will inspect the Random Forest Model.
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(3,sample.kind = "Rounding")  #if using R3.5 or earlier set.seed(3) 
+    train_rf <- randomForest(income ~ ., data = training) 
+    #Compute the accuracy of the random forest model on the testing dataset 
+    rf_accuracy <- confusionMatrix(predict(train_rf, testing), 
+                                   testing$income)$overall["Accuracy"] 
+    #Save the random forest accuracy results to our table 
+    accuracy_results <- bind_rows(accuracy_results, 
+                                  tibble(method="random forest", Accuracy = rf_accuracy)) 
+    #View the random forest accuracy results in our table 
+    accuracy_results %>% knitr::kable() 
+```
+
+## Testing the most accurate model with the validation set
+From the results table we can see that the model having the highest accuracy is the Random Forest model. Our final step is to test that model using the validation set so as to see the final overall accuracy.
+```{r,echo=TRUE, warning=FALSE} 
+   set.seed(3, sample.kind = "Rounding") #if using R3.5 or earlier set.seed(3) 
+   final_train_rf <- randomForest(income ~ ., data =training) 
+  
+ #Compute the accuracy of our final random forest model on the validation set 
+   final_accuracy <- confusionMatrix(predict(final_train_rf, 
+                               validation), 
+                         validation$income)$overall["Accuracy"] 
+  
+ ##Save the random forest accuracy results to our table. 
+   accuracy_results <- bind_rows(accuracy_results, 
+                               tibble(method="Final Random Forest Model", 
+                                      Accuracy = final_accuracy)) 
+ #View the final random forest model accuracy results in our table 
+   accuracy_results %>% knitr::kable() 
+```
+
+
+# Results
+As we can see from our results table we set up 3 models to predict whether a person has an income greater than 50k dollars or not. The model with the highest accuracy is the Random Forest model having an accuracy of 0.859, after being tested with the split testing set. After that, the model mentioned above was tested with the validation set and we found the final overall accuracy.
+```{r, echo=FALSE} 
+ #Results 
+ accuracy_results %>% knitr::kable() 
+```
+
+# Conclusion
+After analyzing the Adult Census Income dataset and our goal was to make a machine learning algorithm, predicting whether a person's income is greater than 50k dollars or not. We achieved that after forming three models and choosing the model with the best accuracy. That was the Random Forest model achieving a 0.858 final overall accuracy after being tested with the validation set. This accuracy is satisfying and adequate for a predictive model.
+
+# Limitations
+The data is old and can not represent the current US Population.If we make predictions based on this historical data, they wouldn’t perform as well on current data. Since so many of the variables influencing income have changed in the past 25 years, it would be interesting to train new machine learning models on more recent census data to examine the differences.
+
